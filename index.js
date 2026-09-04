@@ -3,11 +3,12 @@ const cors = require("cors");
 const fetch = require("node-fetch");
 
 const app = express();
+
 app.use(cors());
+app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// GOOGLE SHEET CSV LINK
 const SHEET_URL =
   "https://docs.google.com/spreadsheets/d/1x18vTpvM4AkjprnecBmu4S4I-CrqyHHeP2CZqh6GuWo/gviz/tq?tqx=out:csv";
 
@@ -19,16 +20,11 @@ let currentOutfit = {
   shoes: ""
 };
 
-/*
- * NEW:
- * Every time Alexa triggers an outfit,
- * this number changes.
- */
 let triggerID = 0;
 
 
 /* =========================================================
-   CLEAN CSV VALUE
+   CLEAN CSV VALUES
    ========================================================= */
 
 function clean(value) {
@@ -39,7 +35,6 @@ function clean(value) {
     .replace(/^"|"$/g, "")
     .replace(/""/g, '"')
     .trim();
-
 }
 
 
@@ -52,14 +47,11 @@ function parseCSVLine(line) {
   const values = [];
 
   let current = "";
-
   let insideQuotes = false;
-
 
   for (let i = 0; i < line.length; i++) {
 
     const char = line[i];
-
 
     if (char === '"') {
 
@@ -69,34 +61,24 @@ function parseCSVLine(line) {
       ) {
 
         current += '"';
-
         i++;
 
       } else {
 
-        insideQuotes =
-          !insideQuotes;
+        insideQuotes = !insideQuotes;
 
       }
 
-    }
-
-
-    else if (
+    } else if (
       char === "," &&
       !insideQuotes
     ) {
 
-      values.push(
-        clean(current)
-      );
+      values.push(clean(current));
 
       current = "";
 
-    }
-
-
-    else {
+    } else {
 
       current += char;
 
@@ -104,14 +86,9 @@ function parseCSVLine(line) {
 
   }
 
-
-  values.push(
-    clean(current)
-  );
-
+  values.push(clean(current));
 
   return values;
-
 }
 
 
@@ -121,16 +98,9 @@ function parseCSVLine(line) {
 
 async function getRandomOutfit() {
 
-  console.log(
-    "Getting Google Sheet data..."
-  );
+  console.log("Getting Google Sheet data...");
 
-
-  const response =
-    await fetch(
-      SHEET_URL
-    );
-
+  const response = await fetch(SHEET_URL);
 
   if (!response.ok) {
 
@@ -140,31 +110,19 @@ async function getRandomOutfit() {
 
   }
 
+  const text = await response.text();
 
-  const text =
-    await response.text();
-
-
-  console.log(
-    "Google Sheet response:"
-  );
-
+  console.log("Google Sheet response:");
   console.log(text);
 
-
-  const rows =
-    text
-      .split(/\r?\n/)
-      .filter(
-        row => row.trim() !== ""
-      );
-
+  const rows = text
+    .split(/\r?\n/)
+    .filter(row => row.trim() !== "");
 
   console.log(
     "Number of rows:",
     rows.length
   );
-
 
   if (rows.length <= 1) {
 
@@ -173,13 +131,9 @@ async function getRandomOutfit() {
     );
 
     return null;
-
   }
 
-
-  const outfitRows =
-    rows.slice(1);
-
+  const outfitRows = rows.slice(1);
 
   const randomRow =
     outfitRows[
@@ -189,44 +143,77 @@ async function getRandomOutfit() {
       )
     ];
 
-
   console.log(
-    "Random row:"
-  );
-
-  console.log(
+    "Random row:",
     randomRow
   );
 
-
   const cols =
-    parseCSVLine(
-      randomRow
-    );
-
+    parseCSVLine(randomRow);
 
   console.log(
-    "Parsed columns:"
-  );
-
-  console.log(
+    "Parsed columns:",
     cols
   );
 
-
   return {
 
-    top:
-      cols[0] || "",
+    top: cols[0] || "",
 
-    bottom:
-      cols[1] || "",
+    bottom: cols[1] || "",
 
-    shoes:
-      cols[2] || ""
+    shoes: cols[2] || ""
 
   };
+}
 
+
+/* =========================================================
+   TRIGGER NEW OUTFIT
+   ========================================================= */
+
+async function triggerOutfit() {
+
+  console.log(
+    "================================="
+  );
+
+  console.log(
+    "NEW OUTFIT TRIGGER"
+  );
+
+  console.log(
+    "================================="
+  );
+
+  const outfit =
+    await getRandomOutfit();
+
+  if (!outfit) {
+
+    throw new Error(
+      "No outfits found"
+    );
+
+  }
+
+  currentOutfit = outfit;
+
+  mode = "outfit";
+
+  triggerID++;
+
+  console.log(
+    "NEW TRIGGER ID:",
+    triggerID
+  );
+
+  console.log(
+    "NEW OUTFIT:",
+    currentOutfit
+  );
+
+  return currentOutfit;
 }
 
 
@@ -234,52 +221,43 @@ async function getRandomOutfit() {
    TEST
    ========================================================= */
 
-app.get(
-  "/test",
-  async (req, res) => {
+app.get("/test", async (req, res) => {
 
-    try {
+  try {
 
-      const outfit =
-        await getRandomOutfit();
+    const outfit =
+      await getRandomOutfit();
 
+    res.json({
 
-      res.json({
+      success: true,
 
-        success: true,
+      outfit: outfit
 
-        outfit: outfit
+    });
 
-      });
+  } catch (err) {
 
-    }
+    console.error(
+      "TEST ERROR:",
+      err
+    );
 
+    res.status(500).json({
 
-    catch (err) {
+      success: false,
 
-      console.error(
-        "TEST ERROR:",
-        err
-      );
+      error: err.message
 
-
-      res.status(500).json({
-
-        success: false,
-
-        error:
-          err.message
-
-      });
-
-    }
+    });
 
   }
-);
+
+});
 
 
 /* =========================================================
-   ALEXA OUTFIT TRIGGER
+   OUTFIT TRIGGER
    ========================================================= */
 
 app.get(
@@ -288,77 +266,8 @@ app.get(
 
     try {
 
-      console.log(
-        "================================="
-      );
-
-      console.log(
-        "OUTFIT TRIGGER RECEIVED"
-      );
-
-      console.log(
-        "================================="
-      );
-
-
       const outfit =
-        await getRandomOutfit();
-
-
-      if (!outfit) {
-
-        return res.status(404).json({
-
-          success: false,
-
-          message:
-            "No outfits found"
-
-        });
-
-      }
-
-
-      /*
-       * Save the new outfit.
-       */
-
-      currentOutfit =
-        outfit;
-
-
-      /*
-       * Change mode.
-       */
-
-      mode =
-        "outfit";
-
-
-      /*
-       * IMPORTANT:
-       *
-       * Increase trigger ID EVERY
-       * time Alexa calls this endpoint.
-       */
-
-      triggerID++;
-
-
-      console.log(
-        "Trigger ID:",
-        triggerID
-      );
-
-
-      console.log(
-        "Current outfit:"
-      );
-
-      console.log(
-        currentOutfit
-      );
-
+        await triggerOutfit();
 
       res.json({
 
@@ -371,20 +280,16 @@ app.get(
           triggerID,
 
         outfit:
-          currentOutfit
+          outfit
 
       });
 
-    }
-
-
-    catch (err) {
+    } catch (err) {
 
       console.error(
         "TRIGGER ERROR:",
         err
       );
-
 
       res.status(500).json({
 
@@ -405,104 +310,76 @@ app.get(
    STATUS
    ========================================================= */
 
-app.get(
-  "/status",
-  (req, res) => {
+app.get("/status", (req, res) => {
 
-    res.json({
+  res.json({
 
-      mode:
-        mode,
+    mode:
+      mode,
 
-      /*
-       * NEW:
-       * DAKboard watches this number.
-       */
+    triggerID:
+      triggerID,
 
-      triggerID:
-        triggerID,
+    outfit: {
 
-      outfit: {
+      top:
+        currentOutfit.top,
 
-        top:
-          currentOutfit.top,
+      bottom:
+        currentOutfit.bottom,
 
-        bottom:
-          currentOutfit.bottom,
+      shoes:
+        currentOutfit.shoes
 
-        shoes:
-          currentOutfit.shoes
+    }
 
-      }
+  });
 
-    });
-
-  }
-);
+});
 
 
 /* =========================================================
    RESET
    ========================================================= */
 
-app.get(
-  "/reset",
-  (req, res) => {
+app.get("/reset", (req, res) => {
 
-    mode =
-      "idle";
+  mode = "idle";
 
+  currentOutfit = {
 
-    currentOutfit = {
+    top: "",
 
-      top: "",
+    bottom: "",
 
-      bottom: "",
+    shoes: ""
 
-      shoes: ""
+  };
 
-    };
+  res.json({
 
+    success: true,
 
-    /*
-     * IMPORTANT:
-     *
-     * DO NOT reset triggerID.
-     *
-     * The triggerID must continue increasing
-     * so DAKboard can recognize a future
-     * Alexa trigger as a NEW trigger.
-     */
+    message:
+      "Reset done",
 
+    triggerID:
+      triggerID
 
-    res.json({
+  });
 
-      success: true,
-
-      message:
-        "Reset done",
-
-      triggerID:
-        triggerID
-
-    });
-
-  }
-);
+});
 
 
 /* =========================================================
    START SERVER
    ========================================================= */
 
-app.listen(
-  PORT,
-  () => {
+app.listen(PORT, () => {
 
-    console.log(
-      "Server running on port " +
-      PORT
-    );
+  console.log(
+    "Server running on port " +
+    PORT
+  );
 
-  }
-);
+});
