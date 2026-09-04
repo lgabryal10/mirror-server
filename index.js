@@ -28,20 +28,23 @@ async function getRandomOutfit() {
   const res = await fetch(SHEET_URL);
   const text = await res.text();
 
-  const rows = text.split("\n").slice(1).filter(r => r.trim() !== "");
+  const rows = text.split("\n").slice(1).filter(r => r.trim());
 
   if (rows.length === 0) return null;
 
   const randomRow = rows[Math.floor(Math.random() * rows.length)];
-  const cols = randomRow.split(",");
+
+  // 🔥 SAFE PARSE (handles quotes correctly)
+  const cols = randomRow.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
+
+  const clean = (str) => str ? str.replace(/"/g, "").trim() : "";
 
   return {
-    top: clean(cols[0]),
-    bottom: clean(cols[1]),
-    shoes: clean(cols[2])
+    top: clean(cols?.[0]),
+    bottom: clean(cols?.[1]),
+    shoes: clean(cols?.[2])
   };
 }
-
 // ✅ TRIGGER (Alexa / iPhone Shortcut)
 app.get("/trigger/outfit", async (req, res) => {
   try {
